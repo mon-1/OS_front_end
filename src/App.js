@@ -2,10 +2,10 @@ import React, { useContext, useState, useEffect, useCallback } from "react";
 import "./App.css";
 import { Web3Context } from "./Web3Context";
 import OmniStakerL2 from "./OmniStakerL2.json";
-import logo from ".logos/Omni_Staker_Logo.jpg";
+import logo from "./Omni_Staker_Logo.jpg";
 import { getWeb3, checkConnection } from "./web3";
-import layerZeroLogo from ".logos/LayerZero_logo.png";
-import ethenaLogo from ".logos/Ethena.avif";
+import layerZeroLogo from "./LayerZero_logo.png";
+import ethenaLogo from "./Ethena.avif";
 
 // GasPriceOracle address remains the same
 const gasPriceOracleAddress = "0x420000000000000000000000000000000000000F";

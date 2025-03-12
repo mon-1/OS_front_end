@@ -98,27 +98,6 @@ function App() {
     }
   }, [web3, getGasPriceOracleContract]);
 
-  const decodeErrorData = useCallback(
-    (errorHex) => {
-      if (!errorHex) return null;
-      const dataWithoutSignature = errorHex.slice(10);
-      try {
-        const minFee = "0x" + dataWithoutSignature.slice(0, 64);
-        const requiredFee = "0x" + dataWithoutSignature.slice(64, 128);
-        const minFeeDecimal = BigInt(minFee).toString();
-        const requiredFeeDecimal = BigInt(requiredFee).toString();
-        return {
-          minFee: web3.utils.fromWei(minFeeDecimal, "ether"),
-          requiredFee: web3.utils.fromWei(requiredFeeDecimal, "ether"),
-        };
-      } catch (e) {
-        console.error("Error decoding data:", e);
-        return null;
-      }
-    },
-    [web3]
-  );
-
   const estimateFee = useCallback(
     async (amount, isStaking = true) => {
       try {

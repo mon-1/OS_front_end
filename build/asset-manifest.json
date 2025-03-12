@@ -1,0 +1,19 @@
+{
+  "files": {
+    "main.css": "/static/css/main.99fd5c73.css",
+    "main.js": "/static/js/main.444b706d.js",
+    "static/js/488.f16c8b15.chunk.js": "/static/js/488.f16c8b15.chunk.js",
+    "static/media/background.jpg": "/static/media/background.56884c7287fadfea2133.jpg",
+    "static/media/Omni_Staker_Logo.jpg": "/static/media/Omni_Staker_Logo.6ca15f772dcca0ae1b0a.jpg",
+    "static/media/LayerZero_logo.png": "/static/media/LayerZero_logo.2b58f4c82240f4816c03.png",
+    "static/media/Ethena.avif": "/static/media/Ethena.307986702808f95c521a.avif",
+    "index.html": "/index.html",
+    "main.99fd5c73.css.map": "/static/css/main.99fd5c73.css.map",
+    "main.444b706d.js.map": "/static/js/main.444b706d.js.map",
+    "488.f16c8b15.chunk.js.map": "/static/js/488.f16c8b15.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.99fd5c73.css",
+    "static/js/main.444b706d.js"
+  ]
+}

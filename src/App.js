@@ -315,50 +315,6 @@ function App() {
     }
   };
 
-  const stake_USDe_batch = async () => {
-    try {
-      await executeTransaction(async () => {
-        if (!web3 || !account) throw new Error("Please connect your wallet");
-        const contract = getContract();
-        const amountInWei = web3.utils.toWei(stakeAmount, "ether");
-
-        const allowanceEnough = await checkAllowanceUSDE(amountInWei);
-        if (!allowanceEnough) {
-          await approveUSDE(amountInWei);
-          console.log("Approval successful for stake_USDe_batch");
-        } else {
-          console.log(
-            "Sufficient allowance available, skipping approval for stake_USDe_batch"
-          );
-        }
-
-        console.log("Calling stake_with_batch with amount:", amountInWei);
-        const tx = await contract.methods
-          .stake_USDe_batch(amountInWei)
-          .send({ from: account });
-        console.log("stake_with_batch transaction successful:", tx);
-      });
-    } catch (error) {
-      await handleTransactionError(error);
-    }
-  };
-
-  const withdraw_sUSDe_batch = async () => {
-    try {
-      await executeTransaction(async () => {
-        if (!web3 || !account) throw new Error("Please connect your wallet");
-        const contract = getContract();
-        console.log("Calling withdraw (batch withdrawal)");
-        const tx = await contract.methods
-          .withdraw_sUSDe_batch() // Adjust the method name and parameters as needed
-          .send({ from: account });
-        console.log("Withdraw transaction successful:", tx);
-      });
-    } catch (error) {
-      await handleTransactionError(error);
-    }
-  };
-
   // Add popup close handler
   const handleClosePopup = () => {
     setShowTxPopup(false);
@@ -437,18 +393,16 @@ function App() {
                   Stake Solo
                 </button>
                 <button
-                  onClick={stake_USDe_batch}
-                  disabled={loading || !stakeAmount}
-                  className="action-button batch-btn"
+                  disabled={true}
+                  className="action-button batch-btn coming-soon"
                 >
-                  Stake with Batch
+                  (Coming Soon)
                 </button>
                 <button
-                  onClick={withdraw_sUSDe_batch}
-                  disabled={loading}
-                  className="action-button withdraw-btn"
+                  disabled={true}
+                  className="action-button withdraw-btn coming-soon"
                 >
-                  Withdraw Batch
+                  (Coming Soon)
                 </button>
               </div>
               {txStatus && <div className="status-message">{txStatus}</div>}
@@ -517,6 +471,13 @@ function App() {
           rel="noopener noreferrer"
         >
           Github
+        </a>
+        <a
+          href="https://x.com/Omnistaker/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          X
         </a>
         {/* ...existing social link code... */}
       </div>

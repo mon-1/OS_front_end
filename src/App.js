@@ -274,6 +274,12 @@ function App() {
 
   const stake_USDe = async () => {
     try {
+      // Add minimum amount check
+      if (Number(stakeAmount) < 5) {
+        setError("Minimum staking amount is 5 USDE");
+        return;
+      }
+
       await executeTransaction(async () => {
         if (!web3 || !account) throw new Error("Please connect your wallet");
         const contract = getContract();
@@ -379,8 +385,16 @@ function App() {
               <input
                 type="number"
                 value={stakeAmount}
-                onChange={(e) => setStakeAmount(e.target.value)}
-                placeholder="Enter amount"
+                onChange={(e) => {
+                  setStakeAmount(e.target.value);
+                  if (Number(e.target.value) < 5) {
+                    setError("Minimum staking amount is 5 USDE");
+                  } else {
+                    setError(null);
+                  }
+                }}
+                min="5"
+                placeholder="Enter amount (min. 5 USDE)"
                 disabled={loading}
                 className="amount-input"
               />

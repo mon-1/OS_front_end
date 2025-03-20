@@ -6,6 +6,7 @@ import logo from "./Omni_Staker_Logo.jpg";
 import { getWeb3, checkConnection } from "./web3";
 import layerZeroLogo from "./LayerZero_logo.png";
 import ethenaLogo from "./Ethena.avif";
+import AnalyticsComponent from "./Analytics";
 
 // GasPriceOracle address remains the same
 const gasPriceOracleAddress = "0x420000000000000000000000000000000000000F";
@@ -485,6 +486,7 @@ function App() {
       {showTxPopup && txHash && (
         <TransactionPopup txHash={txHash} onClose={handleClosePopup} />
       )}
+      <AnalyticsComponent />
     </div>
   );
 }

@@ -3,18 +3,17 @@ import "./App.css";
 import { Web3Context } from "./Web3Context";
 import OmniStakerL2 from "./OmniStakerL2.json";
 import logo from "./Omni_Staker_Logo.jpg";
-import { getWeb3, checkConnection } from "./web3";
+import { checkConnection } from "./web3"; // Removed unused getWeb3 import
 import layerZeroLogo from "./LayerZero_logo.png";
 import ethenaLogo from "./Ethena.avif";
-import AnalyticsComponent from "./Analytics";
+import IERC20 from "./IERC20.json";
+import githubLogo from "./GH.png";
+import xLogo from "./X.png";
+import GeoBlock from "./GeoBlock"; // Import the GeoBlock component
 
-// GasPriceOracle address remains the same
-const gasPriceOracleAddress = "0x420000000000000000000000000000000000000F";
-
-// Add this new component before the App component
+// Transaction Popup Component
 const TransactionPopup = ({ txHash, onClose }) => {
-  const baseScanUrl = `https://basescan.org/tx/${txHash}`;
-  const layerZeroScanUrl = `https://layerzeroscan.com/tx/${txHash}`;
+  if (!txHash) return null;
 
   return (
     <div className="tx-popup">
@@ -26,7 +25,7 @@ const TransactionPopup = ({ txHash, onClose }) => {
       </div>
       <div className="tx-popup-links">
         <a
-          href={baseScanUrl}
+          href={`https://basescan.org/tx/${txHash}`}
           target="_blank"
           rel="noopener noreferrer"
           className="tx-popup-link"
@@ -34,7 +33,7 @@ const TransactionPopup = ({ txHash, onClose }) => {
           View on BaseScan
         </a>
         <a
-          href={layerZeroScanUrl}
+          href={`https://layerzeroscan.com/tx/${txHash}`}
           target="_blank"
           rel="noopener noreferrer"
           className="tx-popup-link"
@@ -46,37 +45,85 @@ const TransactionPopup = ({ txHash, onClose }) => {
   );
 };
 
+// Constants
+const CONTRACT_ADDRESS = "0xC0c0EbfC83e9E9d1A2ED809B4F841BcFB58ACEFE";
+const OFT_STAKING_ADDRESS = "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34";
+// Will be used for unstaking functionality in future version
+const OFT_UNSTAKING_ADDRESS = "0x211Cc4DD073734dA055fbF44a2b4667d5E5fE5d2"; // eslint-disable-line no-unused-vars
+const GAS_PRICE_ORACLE_ADDRESS = "0x420000000000000000000000000000000000000F";
+const MIN_STAKE_AMOUNT = 5;
+
+// Transaction Status Component
+const TransactionStatus = ({ status, hash }) => {
+  if (!status) return null;
+
+  const isSuccess = status.toLowerCase().includes("success");
+  const isPending =
+    status.toLowerCase().includes("preparing") ||
+    status.toLowerCase().includes("submitting") ||
+    status.toLowerCase().includes("waiting");
+
+  return (
+    <div
+      className={`transaction-status ${
+        isSuccess ? "success" : isPending ? "pending" : "error"
+      }`}
+    >
+      <div className="status-icon">
+        {isSuccess ? "✓" : isPending ? "⏳" : "✗"}
+      </div>
+      <div className="status-message">
+        <p>{status}</p>
+        {hash && (
+          <div className="transaction-links">
+            <a
+              href={`https://basescan.org/tx/${hash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View on BaseScan
+            </a>
+            <a
+              href={`https://layerzeroscan.com/tx/${hash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View on LayerZero Scanner
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 function App() {
-  const { account, web3, reconnect, disconnect } = useContext(Web3Context);
+  const { account, web3, isConnected, reconnect, disconnect } =
+    useContext(Web3Context);
   const [stakeAmount, setStakeAmount] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [txStatus, setTxStatus] = useState(null);
-  const [usdeFee, setUsdeFee] = useState(null);
-  const [l1BaseFee, setL1BaseFee] = useState(null);
-  const [threshold, setThreshold] = useState(null);
-  const [batchStakeFee, setBatchStakeFee] = useState(null);
   const [txHash, setTxHash] = useState(null);
+  const [soloFee, setSoloFee] = useState(null);
+  const [batchFee, setBatchFee] = useState(null);
+  const [l1BaseFee, setL1BaseFee] = useState(null);
+  const [threshold, setThreshold] = useState(5);
+  const [activeTab, setActiveTab] = useState("solo");
+  const [batchMode, setBatchMode] = useState("stake"); // Add state for batch sub-mode
+  // Will be populated when batch functionality is implemented
+  const [userBatches, setUserBatches] = useState([]); // eslint-disable-line no-unused-vars
+  const [ethPrice, setEthPrice] = useState(null);
   const [showTxPopup, setShowTxPopup] = useState(false);
 
-  const contractAddress = "0xC0c0EbfC83e9E9d1A2ED809B4F841BcFB58ACEFE";
-
-  const oftStakingAddress = "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34";
-  const oftUnstakingAddress = "0x211Cc4DD073734dA055fbF44a2b4667d5E5fE5d2";
-
-  // getContract uses the new ABI
-  const getContract = useCallback(() => {
-    if (!web3) {
-      throw new Error("Web3 is not initialized");
-    }
-    return new web3.eth.Contract(OmniStakerL2, contractAddress);
+  // Contract instances
+  const getOmniStakerContract = useCallback(() => {
+    if (!web3) return null;
+    return new web3.eth.Contract(OmniStakerL2, CONTRACT_ADDRESS);
   }, [web3]);
 
-  // GasPriceOracle retrieval (unchanged)
   const getGasPriceOracleContract = useCallback(() => {
-    if (!web3) {
-      throw new Error("Web3 is not initialized");
-    }
+    if (!web3) return null;
     const abi = [
       {
         inputs: [],
@@ -86,284 +133,250 @@ function App() {
         type: "function",
       },
     ];
-    return new web3.eth.Contract(abi, gasPriceOracleAddress);
+    return new web3.eth.Contract(abi, GAS_PRICE_ORACLE_ADDRESS);
   }, [web3]);
 
-  const fetchL1BaseFee = useCallback(async () => {
+  const getUSDETokenContract = useCallback(() => {
+    if (!web3) return null;
+    return new web3.eth.Contract(IERC20.abi, OFT_STAKING_ADDRESS);
+  }, [web3]);
+
+  // Fetch contract data
+  const fetchContractData = useCallback(async () => {
+    if (!web3 || !account) return;
+
     try {
-      const contract = getGasPriceOracleContract();
-      const fee = await contract.methods.l1BaseFee().call();
-      setL1BaseFee(web3.utils.fromWei(fee, "gwei"));
-    } catch (error) {
-      console.error("Error fetching L1 base fee:", error);
-    }
-  }, [web3, getGasPriceOracleContract]);
-
-  const estimateFee = useCallback(
-    async (amount, isStaking = true) => {
+      // Fetch threshold
+      const contract = getOmniStakerContract();
+      // Note: This might need to be adjusted based on your actual contract methods
+      // If threshold is not directly accessible, you might need to use a different method
       try {
-        if (!amount || isNaN(amount) || amount <= 0) {
-          throw new Error("Invalid amount");
-        }
-        const contract = getContract();
-        const amountInWei = web3.utils.toWei(amount.toString(), "ether");
-        const oftAddress = isStaking ? oftStakingAddress : oftUnstakingAddress;
-        console.log("Calling estimate_fee_helper with:", {
-          amountInWei,
-          oftAddress,
-          account,
-        });
-        // Note: For solo staking, pass false for _batch; for batch, pass true.
-        const fee = await contract.methods
-          .estimate_fee_helper(amountInWei, oftAddress, !isStaking)
-          .call({ from: account });
-        console.log("estimate_fee_helper result:", fee);
-        return fee;
-      } catch (error) {
-        console.error("Fee estimation error details:", {
-          error,
-          message: error.message,
-        });
-        throw error;
+        const thresh = await contract.methods.threshold().call();
+        setThreshold(Number(thresh) || 5);
+      } catch (err) {
+        console.warn("Could not fetch threshold, using default:", err);
+        setThreshold(5);
       }
-    },
-    [web3, account, getContract, oftStakingAddress, oftUnstakingAddress]
-  );
 
-  const handleTransactionError = async (error) => {
-    if (error.message.includes("Extension context invalidated")) {
-      setError("MetaMask connection lost. Trying to reconnect...");
-      await reconnect();
-      setError("Please try transaction again");
+      // Fetch L1 base fee
+      try {
+        const oracleContract = getGasPriceOracleContract();
+        const fee = await oracleContract.methods.l1BaseFee().call();
+        setL1BaseFee(web3.utils.fromWei(fee, "gwei"));
+      } catch (err) {
+        console.error("Error fetching L1 base fee:", err);
+      }
+
+      // Fetch user batches if needed
+      // This would be implemented based on your contract structure
+    } catch (error) {
+      console.error("Error fetching contract data:", error);
+    }
+  }, [web3, account, getOmniStakerContract, getGasPriceOracleContract]);
+
+  // Estimate fees
+  const estimateFees = useCallback(async () => {
+    if (!web3 || !account) return;
+
+    try {
+      const contract = getOmniStakerContract();
+      const testAmount = web3.utils.toWei("10", "ether");
+
+      // Estimate solo fee
+      const soloFeeWei = await contract.methods
+        .estimate_fee_helper(testAmount, OFT_STAKING_ADDRESS, false)
+        .call({ from: account });
+
+      const soloFeeEth = Number(
+        web3.utils.fromWei(soloFeeWei, "ether")
+      ).toFixed(6);
+      setSoloFee(soloFeeEth);
+
+      // Calculate batch fee based on threshold
+      const batchFeeEth = (Number(soloFeeEth) / threshold).toFixed(6);
+      setBatchFee(batchFeeEth);
+    } catch (error) {
+      console.error("Error estimating fees:", error);
+    }
+  }, [web3, account, getOmniStakerContract, threshold]);
+
+  // Fetch ETH price in USD
+  const fetchEthPrice = useCallback(async () => {
+    try {
+      const response = await fetch(
+        "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"
+      );
+      const data = await response.json();
+      if (data.ethereum && data.ethereum.usd) {
+        setEthPrice(data.ethereum.usd);
+      }
+    } catch (error) {
+      console.error("Error fetching ETH price:", error);
+    }
+  }, []);
+
+  // Initialize and refresh data
+  useEffect(() => {
+    if (web3 && account) {
+      fetchContractData();
+      estimateFees();
+      fetchEthPrice(); // Fetch ETH price initially
+
+      const feeInterval = setInterval(() => {
+        estimateFees();
+        fetchContractData();
+      }, 30000);
+
+      const priceInterval = setInterval(() => {
+        fetchEthPrice();
+      }, 60000); // Refresh price every minute
+
+      return () => {
+        clearInterval(feeInterval);
+        clearInterval(priceInterval);
+      };
     } else {
-      setError(error.message);
+      // Even if not connected, fetch ETH price
+      fetchEthPrice();
+      const priceInterval = setInterval(fetchEthPrice, 60000);
+      return () => clearInterval(priceInterval);
     }
+  }, [web3, account, fetchContractData, estimateFees, fetchEthPrice]);
+
+  // Check and handle token allowance
+  const checkAndApproveToken = async (amount) => {
+    const tokenContract = getUSDETokenContract();
+    const amountWei = web3.utils.toWei(amount.toString(), "ether");
+
+    const allowance = await tokenContract.methods
+      .allowance(account, CONTRACT_ADDRESS)
+      .call();
+
+    if (BigInt(allowance) < BigInt(amountWei)) {
+      setTxStatus("Approving token spending...");
+      const tx = await tokenContract.methods
+        .approve(CONTRACT_ADDRESS, amountWei)
+        .send({ from: account });
+      setTxStatus("Approval successful!");
+      return tx;
+    }
+
+    return true; // Already approved
   };
 
-  const handleRpcError = async () => {
-    const isConnected = await checkConnection();
-    if (!isConnected) {
-      const newWeb3 = await getWeb3();
-      if (newWeb3) {
-        return true;
-      }
+  // Solo stake function
+  const handleSoloStake = async () => {
+    if (!web3 || !account) {
+      setError("Please connect your wallet");
+      return;
     }
-    return false;
-  };
 
-  const executeTransaction = async (txFunction) => {
+    if (isNaN(stakeAmount) || Number(stakeAmount) < MIN_STAKE_AMOUNT) {
+      setError(`Minimum staking amount is ${MIN_STAKE_AMOUNT} USDE`);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setTxStatus("Preparing transaction...");
+    setTxHash(null);
+
     try {
+      // Check connection
       if (!(await checkConnection())) {
-        setTxStatus("Reconnecting...");
-        await handleRpcError();
+        setTxStatus("Reconnecting to network...");
+        await reconnect();
       }
-      const result = await txFunction();
-      setTxStatus("Transaction successful!");
-      return result;
+
+      // Convert amount to wei
+      const amountWei = web3.utils.toWei(stakeAmount, "ether");
+
+      // Check and approve token allowance
+      await checkAndApproveToken(stakeAmount);
+
+      // Estimate fee for this specific transaction
+      const contract = getOmniStakerContract();
+      const feeWei = await contract.methods
+        .estimate_fee_helper(amountWei, OFT_STAKING_ADDRESS, false)
+        .call({ from: account });
+
+      setTxStatus("Submitting stake transaction...");
+
+      // Execute stake transaction
+      const tx = await contract.methods
+        .stake_USDe(amountWei)
+        .send({ from: account, value: feeWei });
+
+      setTxHash(tx.transactionHash);
+      setTxStatus("Stake successful! Tokens are being bridged to Ethereum.");
+
+      // Show popup for successful transaction
+      setShowTxPopup(true);
+
+      // Auto-hide popup after 15 seconds
+      setTimeout(() => {
+        setShowTxPopup(false);
+      }, 15000);
+
+      // Clear input
+      setStakeAmount("");
     } catch (error) {
-      if (error.message.includes("JSON-RPC")) {
-        setTxStatus("Network error, retrying...");
-        const recovered = await handleRpcError();
-        if (recovered) {
-          return await txFunction();
-        }
+      console.error("Staking error:", error);
+      if (error.message.includes("user rejected")) {
+        setError("Transaction was rejected");
+      } else if (error.message.includes("insufficient funds")) {
+        setError("Insufficient funds for gas fee");
+      } else {
+        setError(`Transaction failed: ${error.message.slice(0, 100)}...`);
       }
-      throw error;
+      setTxStatus(null);
     } finally {
       setLoading(false);
-      setTimeout(() => setTxStatus(null), 5000);
     }
   };
 
-  // Remove unstake and unstake message functions (no longer needed)
-
-  // NEW: Fetch the threshold value from the contract
-  const fetchThreshold = useCallback(async () => {
-    if (web3 && account) {
-      try {
-        const contract = getContract();
-        const thresh = await contract.methods.threshold().call();
-        setThreshold(thresh);
-      } catch (error) {
-        console.error("Error fetching threshold:", error);
-      }
-    }
-  }, [web3, account, getContract]);
-
-  // Update fee estimates and calculate batch fee based on threshold
-  const updateFeeEstimates = useCallback(async () => {
-    if (web3 && account) {
-      try {
-        const usdeEstimate = await estimateFee("10", true);
-        const feeInEther = Number(web3.utils.fromWei(usdeEstimate, "ether"));
-        // Round solo fee to 6 decimals
-        const soloFee = Number(feeInEther.toFixed(6));
-        // Use threshold if available and > 0, otherwise fallback to 5
-        const divisor =
-          threshold && Number(threshold) > 0 ? Number(threshold) : 5;
-        const batchFee = Number((feeInEther / divisor).toFixed(6));
-        setUsdeFee(soloFee);
-        setBatchStakeFee(batchFee);
-      } catch (error) {
-        console.error("Error estimating fees:", error);
-      }
-    }
-  }, [web3, account, estimateFee, threshold]);
-
-  useEffect(() => {
-    if (web3 && account) {
-      fetchThreshold();
-      updateFeeEstimates();
-      fetchL1BaseFee();
-      const interval = setInterval(() => {
-        updateFeeEstimates();
-        fetchL1BaseFee();
-      }, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [account, web3, updateFeeEstimates, fetchL1BaseFee, fetchThreshold]);
-
-  // Remove stake_batch or unstake functions from actions
-  // For now, we only display estimates.
-
-  const erc20ABI = [
-    {
-      constant: false,
-      inputs: [
-        { name: "spender", type: "address" },
-        { name: "value", type: "uint256" },
-      ],
-      name: "approve",
-      outputs: [{ name: "", type: "bool" }],
-      type: "function",
-    },
-    {
-      constant: true,
-      inputs: [
-        { name: "owner", type: "address" },
-        { name: "spender", type: "address" },
-      ],
-      name: "allowance",
-      outputs: [{ name: "", type: "uint256" }],
-      type: "function",
-    },
-  ];
-
-  const checkAllowanceUSDE = async (amountInWei) => {
-    if (!web3 || !account) throw new Error("Web3 or account not available");
-    const tokenContract = new web3.eth.Contract(erc20ABI, oftStakingAddress);
-    const allowance = await tokenContract.methods
-      .allowance(account, contractAddress)
-      .call();
-    return BigInt(allowance) >= BigInt(amountInWei);
+  // Batch stake function (placeholder for now)
+  const handleBatchStake = async () => {
+    setError("Batch staking coming soon!");
   };
 
-  const approveUSDE = async (amountInWei) => {
-    if (!web3 || !account) {
-      throw new Error("Web3 or account not available");
-    }
-    const tokenContract = new web3.eth.Contract(erc20ABI, oftStakingAddress);
-    console.log("Approving USDE spending for amount:", amountInWei);
-    return await tokenContract.methods
-      .approve(contractAddress, amountInWei)
-      .send({ from: account });
+  // Withdraw function (placeholder for now)
+  const handleWithdraw = async () => {
+    setError("Withdrawal functionality coming soon!");
   };
 
-  const stake_USDe = async () => {
-    try {
-      // Add minimum amount check
-      if (Number(stakeAmount) < 5) {
-        setError("Minimum staking amount is 5 USDE");
-        return;
-      }
+  // Clear any errors when switching tabs or batch modes
+  const handleTabChange = (tab) => {
+    setError(null);
+    setActiveTab(tab);
+  };
 
-      await executeTransaction(async () => {
-        if (!web3 || !account) throw new Error("Please connect your wallet");
-        const contract = getContract();
-        const amountInWei = web3.utils.toWei(stakeAmount, "ether");
+  const handleBatchModeChange = (mode) => {
+    setError(null);
+    setBatchMode(mode);
+  };
 
-        const allowanceEnough = await checkAllowanceUSDE(amountInWei);
-        if (!allowanceEnough) {
-          await approveUSDE(amountInWei);
-          console.log("Approval successful for stake_USDe");
-        } else {
-          console.log(
-            "Sufficient allowance available, skipping approval for stake_USDe"
-          );
-        }
-
-        // Retrieve the fee estimated by the contract method
-        const fee = await estimateFee(stakeAmount, true);
-        console.log("Passing fee", fee, "to stake_USDe payable function");
-
-        // Pass the fee in the transaction's value field
-        const tx = await contract.methods
-          .stake_USDe(amountInWei)
-          .send({ from: account, value: fee });
-        console.log("stake_USDe transaction successful:", tx);
-
-        // Show popup for successful transaction
-        setTxHash(tx.transactionHash);
-        setShowTxPopup(true);
-
-        // Auto-hide popup after 15 seconds
-        setTimeout(() => {
-          setShowTxPopup(false);
-          setTxHash(null);
-        }, 15000);
-
-        return tx;
-      });
-    } catch (error) {
-      await handleTransactionError(error);
-    }
+  // Helper to format USD value
+  const formatUsdValue = (ethAmount) => {
+    if (!ethPrice || !ethAmount) return null;
+    const usdValue = Number(ethAmount) * ethPrice;
+    return usdValue.toFixed(2);
   };
 
   // Add popup close handler
   const handleClosePopup = () => {
     setShowTxPopup(false);
-    setTxHash(null);
   };
 
   return (
-    <div className="App">
-      <div className="explainer-container">
-        <div className="explainer left">
-          {/* Updated left explainer for Solo Stake */}
-          <h3>Solo Stake</h3>
-          <p>
-            In a solo stake you pay the full cross-chain transfer fee and
-            receive your tokens directly. The cost displayed below is for
-            staking 10 USDE tokens.
-          </p>
-          <ol>
-            <li>Connect your wallet</li>
-            <li>Enter the amount you want to stake</li>
-            <li>Review fee estimates below</li>
-          </ol>
-          <div className="fee-estimate">
-            <p>Solo Stake Fee Estimate (for 10 USDE):</p>
-            <strong>
-              {usdeFee !== null ? `${usdeFee} ETH` : "Calculating..."}
-            </strong>
-            <p>L1 Base Fee:</p>
-            <strong>
-              {l1BaseFee
-                ? `${Number(l1BaseFee).toFixed(2)} Gwei`
-                : "Calculating..."}
-            </strong>
-          </div>
-        </div>
-
-        <div className="main-content">
+    <GeoBlock>
+      <div className="App">
+        <header className="App-header">
           <div className="wallet-connection">
-            {account ? (
+            {isConnected ? (
               <div className="account-info">
                 <span className="account-address">
-                  {account.slice(0, 6)}...{account.slice(-4)}
+                  {account?.slice(0, 6)}...{account?.slice(-4)}
                 </span>
                 <button onClick={disconnect} className="disconnect-btn">
                   Disconnect
@@ -375,69 +388,195 @@ function App() {
               </button>
             )}
           </div>
+        </header>
 
+        <main className="main-container">
           <div className="logo-container">
             <img src={logo} className="App-logo" alt="Omni Staker Logo" />
+            <h1>Omni Staker</h1>
+            <p className="tagline">
+              Cross-chain USDe staking solution powered by LayerZero
+            </p>
           </div>
 
-          {account ? (
-            <div className="staking-container">
-              <input
-                type="number"
-                value={stakeAmount}
-                onChange={(e) => {
-                  setStakeAmount(e.target.value);
-                  if (Number(e.target.value) < 5) {
-                    setError("Minimum staking amount is 5 USDE");
-                  } else {
-                    setError(null);
-                  }
-                }}
-                min="5"
-                placeholder="Enter amount (min. 5 USDE)"
-                disabled={loading}
-                className="amount-input"
-              />
-              {/* New action buttons */}
-              <div className="button-group">
-                <button
-                  onClick={stake_USDe}
-                  disabled={loading || !stakeAmount}
-                  className="action-button solo-btn"
-                >
-                  Stake Solo
-                </button>
-                <button
-                  disabled={true}
-                  className="action-button batch-btn coming-soon"
-                >
-                  (Coming Soon)
-                </button>
-                <button
-                  disabled={true}
-                  className="action-button withdraw-btn coming-soon"
-                >
-                  (Coming Soon)
-                </button>
+          <div className="staking-container">
+            {/* Simplified tabs: only Solo and Batched */}
+            <div className="tabs">
+              <button
+                className={`tab-btn ${activeTab === "solo" ? "active" : ""}`}
+                onClick={() => handleTabChange("solo")}
+              >
+                Solo Stake
+              </button>
+              <button
+                className={`tab-btn ${activeTab === "batch" ? "active" : ""}`}
+                onClick={() => handleTabChange("batch")}
+              >
+                Batched Mode{" "}
+                <span className="coming-soon-tag">Coming Soon</span>
+              </button>
+            </div>
+
+            {isConnected ? (
+              <div className="stake-form">
+                {/* For batched mode, show sub-tabs */}
+                {activeTab === "batch" && (
+                  <div className="batch-modes">
+                    <button
+                      className={`batch-mode-btn ${
+                        batchMode === "stake" ? "active" : ""
+                      }`}
+                      onClick={() => handleBatchModeChange("stake")}
+                    >
+                      Stake
+                    </button>
+                    <button
+                      className={`batch-mode-btn ${
+                        batchMode === "withdraw" ? "active" : ""
+                      }`}
+                      onClick={() => handleBatchModeChange("withdraw")}
+                    >
+                      Withdraw
+                    </button>
+                  </div>
+                )}
+
+                <div className="form-info">
+                  {activeTab === "solo" && (
+                    <div className="fee-info">
+                      <p>
+                        Solo stake fee:{" "}
+                        <strong>
+                          {soloFee ? `${soloFee} ETH` : "Calculating..."}
+                          {soloFee && ethPrice && (
+                            <span className="usd-value">
+                              {" "}
+                              (≈${formatUsdValue(soloFee)} USD)
+                            </span>
+                          )}
+                        </strong>
+                      </p>
+                      <p>
+                        L1 Base Fee:{" "}
+                        <strong>
+                          {l1BaseFee
+                            ? `${Number(l1BaseFee).toFixed(2)} Gwei`
+                            : "Loading..."}
+                        </strong>
+                      </p>
+                      <p className="fee-description">
+                        Your tokens will be staked Ethereum mainnet, and you
+                        will receive sUSDe on your chain of choice.
+                      </p>
+                    </div>
+                  )}
+
+                  {activeTab === "batch" && batchMode === "stake" && (
+                    <div className="fee-info">
+                      <div className="coming-soon-overlay">
+                        <span>Coming Soon</span>
+                      </div>
+                      <p>
+                        Batch stake fee:{" "}
+                        <strong>
+                          {batchFee ? `${batchFee} ETH` : "Calculating..."}
+                          {batchFee && ethPrice && (
+                            <span className="usd-value">
+                              {" "}
+                              (≈${formatUsdValue(batchFee)} USD)
+                            </span>
+                          )}
+                        </strong>
+                      </p>
+                      <p className="fee-description">
+                        Your tokens will be batched with others to reduce fees.
+                        Withdrawal available after processing.
+                      </p>
+                    </div>
+                  )}
+
+                  {activeTab === "batch" && batchMode === "withdraw" && (
+                    <div className="fee-info">
+                      <div className="coming-soon-overlay">
+                        <span>Coming Soon</span>
+                      </div>
+                      <p className="fee-description">
+                        Withdraw your batched staked tokens after they've been
+                        processed on Ethereum
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="input-group">
+                  <input
+                    type="number"
+                    value={stakeAmount}
+                    onChange={(e) => {
+                      setStakeAmount(e.target.value);
+                      setError(null);
+                    }}
+                    min={MIN_STAKE_AMOUNT}
+                    placeholder={`Enter an amount (min. ${MIN_STAKE_AMOUNT} USDE)`}
+                    disabled={
+                      loading ||
+                      (activeTab === "batch" && batchMode === "withdraw")
+                    }
+                    className="amount-input"
+                  />
+
+                  <button
+                    onClick={
+                      activeTab === "solo"
+                        ? handleSoloStake
+                        : batchMode === "stake"
+                        ? handleBatchStake
+                        : handleWithdraw
+                    }
+                    disabled={
+                      loading ||
+                      activeTab === "batch" || // Disable all batch functionality for now
+                      (activeTab === "solo" &&
+                        (!stakeAmount ||
+                          Number(stakeAmount) < MIN_STAKE_AMOUNT))
+                    }
+                    className="action-button"
+                  >
+                    {loading
+                      ? "Processing..."
+                      : activeTab === "solo"
+                      ? "Stake Solo"
+                      : batchMode === "stake"
+                      ? "Batch Stake"
+                      : "Withdraw"}
+                  </button>
+                </div>
+
+                {txStatus && (
+                  <TransactionStatus status={txStatus} hash={txHash} />
+                )}
+                {error && <div className="error-message">{error}</div>}
+
+                {activeTab === "batch" && batchMode === "withdraw" && (
+                  <div className="batches-list">
+                    <h3>Your Batches</h3>
+                    <p className="no-batches">
+                      Batch functionality will be available soon
+                    </p>
+                  </div>
+                )}
               </div>
-              {txStatus && <div className="status-message">{txStatus}</div>}
-              {error && <div className="error-message">{error}</div>}
-            </div>
-          ) : (
-            <div className="connect-prompt">
-              Please connect your wallet to view fee estimates
-            </div>
-          )}
+            ) : (
+              <div className="connect-prompt">
+                Please connect your wallet to use Omni Staker
+              </div>
+            )}
+          </div>
+        </main>
 
-          {account && (
-            <div className="batches-info">
-              <h4>Your Batches</h4>
-              {/* <p>Fee estimates are for solo and batched staking.</p> */}
-            </div>
-          )}
-
+        <footer>
           <div className="powered-by">
-            <span>Powered by </span>
+            <span>Powered by</span>
             <a
               href="https://ethena.fi"
               target="_blank"
@@ -460,48 +599,38 @@ function App() {
               />
             </a>
           </div>
-        </div>
 
-        <div className="explainer right">
-          {/* Updated right explainer for Batched Stake */}
-          <h3>Batched Stake</h3>
-          <p>
-            In a batched stake you only pay a reduced fee – the solo fee divided
-            by 5. Tokens must be withdrawn upon finality (exact time varies).
-          </p>
-          <div className="fee-estimate">
-            <p>Batched Stake Fee Estimate:</p>
-            <strong>
-              {batchStakeFee !== null
-                ? `${batchStakeFee} ETH`
-                : "Calculating..."}
-            </strong>
+          <div className="social-links">
+            <a
+              href="https://github.com/owl11/Omni-Staker/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="social-link"
+            >
+              <img
+                src={githubLogo}
+                alt="GitHub"
+                className="social-icon github-icon"
+              />
+              <span></span>
+            </a>
+            <a
+              href="https://x.com/Omnistaker/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="social-link"
+            >
+              <img src={xLogo} alt="X " className="social-icon x-icon" />
+              <span></span>
+            </a>
           </div>
-        </div>
+        </footer>
+
+        {showTxPopup && txHash && (
+          <TransactionPopup txHash={txHash} onClose={handleClosePopup} />
+        )}
       </div>
-      <div className="social-links">
-        <a
-          href="https://github.com/owl11/Omni-Staker/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Github
-        </a>
-        <a
-          href="https://x.com/Omnistaker/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          X
-        </a>
-        {/* ...existing social link code... */}
-      </div>
-      {/* Add this before closing div */}
-      {showTxPopup && txHash && (
-        <TransactionPopup txHash={txHash} onClose={handleClosePopup} />
-      )}
-      <AnalyticsComponent />
-    </div>
+    </GeoBlock>
   );
 }
 

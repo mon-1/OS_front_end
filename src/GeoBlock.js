@@ -22,7 +22,7 @@ const COUNTRY_NAMES = {
   SY: "Syria",
   RU: "Russia",
   BY: "Belarus",
-  US: "United",
+  US: "United States",
   // Add more country names as needed
 };
 

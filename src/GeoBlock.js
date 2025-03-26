@@ -70,13 +70,8 @@ const GeoBlock = ({ children }) => {
     );
   }
 
-  if (error) {
-    // If there's an error determining location, we let the user proceed
-    // but you may want to handle this differently
-    return children;
-  }
 
-  if (isBlocked) {
+  if (isBlocked || error) {
     return (
       <div className="geo-block-container">
         <div className="geo-block-content">
